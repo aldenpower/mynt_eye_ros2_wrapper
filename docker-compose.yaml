@@ -1,0 +1,30 @@
+services:
+  mynteye:
+    container_name: mynteye
+    privileged: true
+    network_mode: host
+    runtime: nvidia
+    build:
+      context: .
+    environment:
+      - DISPLAY=${DISPLAY}
+      - XDG_RUNTIME_DIR=/tmp/runtime-${USER}
+      - QT_X11_NO_MITSHM=1
+      - XAUTHORITY=/tmp/.docker-xauth
+      - NVIDIA_DRIVER_CAPABILITIES=all
+    volumes:
+      - ./ws:/root/ws
+      - /tmp/.docker-xauth:/tmp/.docker-xauth:rw
+      - /etc/localtime:/etc/localtime:ro
+      - /tmp/.X11-unix:/tmp/.X11-unix
+    devices:
+      - /dev/dri:/dev/dri
+      - /dev/video0:/dev/video0
+      - /dev/video1:/dev/video1
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+    stdin_open: true
+    tty: true

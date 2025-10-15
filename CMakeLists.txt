@@ -7,7 +7,8 @@ endif()
 
 # Dependencies
 find_package(rclcpp REQUIRED)
-find_package(std_msgs REQUIRED)
+# find_package(std_msgs REQUIRED)
+# find_package(rclcpp_components REQUIRED)
 # find_package(ament_cmake REQUIRED)
 # find_package(sensor_msgs REQUIRED)
 # find_package(geometry_msgs REQUIRED)
@@ -15,20 +16,17 @@ find_package(std_msgs REQUIRED)
 # find_package(image_transport REQUIRED)
 # find_package(tf2 REQUIRED)
 # find_package(tf2_ros REQUIRED)
-# find_package(OpenCV REQUIRED)
-# find_package(mynteye REQUIRED)
+find_package(OpenCV REQUIRED)
+find_package(mynteye REQUIRED)
 
 
-# target_link_libraries(${PROJECT_NAME}
-  # ${LINK_LIBS}
-# )
 
 # Node executable
 add_executable(${PROJECT_NAME} src/wrapper_node.cc)
 
 target_link_libraries(${PROJECT_NAME} PUBLIC
   rclcpp::rclcpp
-  ${std_msgs_TARGETS}
+  # ${std_msgs_TARGETS}
   # ${geometry_msgs_TARGETS}
   # ${sensor_msgs_TARGETS}
   # cv_bridge::cv_bridge
@@ -37,6 +35,7 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
   # tf2::tf2
   # tf2_ros::static_transform_broadcaster_node
   # tf2_ros::tf2_ros
+  mynteye
 )
 
 install(TARGETS ${PROJECT_NAME}

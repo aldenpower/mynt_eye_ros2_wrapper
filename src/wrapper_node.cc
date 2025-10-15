@@ -1,40 +1,90 @@
-#include <chrono>
-#include <memory>
-#include <string>
-
 #include "rclcpp/rclcpp.hpp"
-#include "std_msgs/msg/string.hpp"
 
 #include "mynteye/logger.h"
+#include "mynteye/api/api.h"
+#include "mynteye/device/context.h"
+#include "mynteye/device/device.h"
 
-using namespace std::chrono_literals;
 
-/* This example creates a subclass of Node and uses a fancy C++11 lambda
- * function to shorten the callback syntax, at the expense of making the
- * code somewhat more difficult to understand at first glance. */
+MYNTEYE_BEGIN_NAMESPACE
 
-class MinimalPublisher : public rclcpp::Node {
+class MynteyeWrapper: public rclcpp::Node {
 public:
-  MinimalPublisher() : Node("minimal_publisher"), count_(0) {
-    publisher_ = this->create_publisher<std_msgs::msg::String>("topic", 10);
-    auto timer_callback = [this]() -> void {
-      auto message = std_msgs::msg::String();
-      message.data = "Hello, world! " + std::to_string(this->count_++);
-      RCLCPP_INFO(this->get_logger(), "Publishing: '%s'", message.data.c_str());
-      this->publisher_->publish(message);
-    };
-    timer_ = this->create_wall_timer(500ms, timer_callback);
+  MynteyeWrapper()
+  : Node("mynteye_wrapper") {
+
+    initDevice();
+
   }
 
 private:
-  rclcpp::TimerBase::SharedPtr timer_;
-  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr publisher_;
-  size_t count_;
+  void initDevice() {
+    std::shared_ptr<Device> device = nullptr;
+
+    device = selectDevice();
+
+    api_ = mynteye::API::Create(device);
+    auto &&requests = device->GetStreamRequests();
+    std::size_t m = requests.size();
+    int request_index = 0;
+
+    model_ = api_->GetModel();
+  }
+
+
+  std::shared_ptr<Device> selectDevice() {
+    // NODELET_INFO_STREAM("Detecting MYNT EYE devices");
+    RCLCPP_INFO(this->get_logger(), "Detecting MYNT EYE devices");
+
+    Context context;
+    auto &&devices = context.devices();
+
+    size_t n = devices.size();
+    if (n <= 0) {
+      RCLCPP_INFO(this->get_logger(), "No MYNT EYE devices :(");
+    }
+
+    RCLCPP_INFO(this->get_logger(), "MYNT EYE devices:");
+    for (size_t i = 0; i < n; i++) {
+      auto &&device = devices[i];
+      auto &&name = device->GetInfo(Info::DEVICE_NAME);
+      auto &&serial_number = device->GetInfo(Info::SERIAL_NUMBER);
+      RCLCPP_INFO(this->get_logger(),
+      "  index: %li, name: %s, serial number: %s",
+       i, name.c_str(),
+       serial_number.c_str());
+    }
+
+    if (n <= 1) {
+      RCLCPP_INFO(this->get_logger(), "Only one MYNT EYE device, select index: 0");
+      return devices[0];
+    } else {
+      while (true) {
+        size_t i;
+        RCLCPP_INFO(this->get_logger(),
+        "There are : %li MYNT EYE devices, select index: ", n);
+        std::cin >> i;
+        if (i >= n) {
+          RCLCPP_INFO(this->get_logger(), "Index out of range :(");
+          continue;
+        }
+        return devices[i];
+      }
+    }
+
+    return nullptr;
+  }
+
+  Model model_;
+  int frame_rate_;
+  std::shared_ptr<API> api_;
 };
+
+MYNTEYE_END_NAMESPACE
 
 int main(int argc, char *argv[]) {
   rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<MinimalPublisher>());
+  rclcpp::spin(std::make_shared<mynteye::MynteyeWrapper>());
   rclcpp::shutdown();
   return 0;
 }

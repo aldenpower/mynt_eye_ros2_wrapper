@@ -29,6 +29,33 @@ private:
     int request_index = 0;
 
     model_ = api_->GetModel();
+
+    // # MYNTEYE-S1030, Reslution: 752x480, Format: YUYV
+    // # index_s_0: 0
+    // # MYNTEYE-S1030, Reslution: 376x240, Format: YUYV
+    // # index_s_1: 1
+    if (model_ == Model::STANDARD) {
+      RCLCPP_INFO(this->get_logger(), "Model::STANDARD");
+      frame_rate_ = api_->GetOptionValue(Option::FRAME_RATE);
+    }
+
+    if (m <= 0){
+      RCLCPP_ERROR(this->get_logger(), "No MYNT EYE devices :(");
+    }
+
+    if (m <= 1) {
+      RCLCPP_INFO(this->get_logger(), "Only one stream request, select index: 0");
+      api_->ConfigStreamRequest(requests[0]);
+    } else {
+      if (request_index >= m) {
+        RCLCPP_INFO(this->get_logger(), "Resquest_index out of range");
+        api_->ConfigStreamRequest(requests[0]);
+      } else {
+        api_->ConfigStreamRequest(requests[request_index]);
+      }
+    }
+
+
   }
 
 

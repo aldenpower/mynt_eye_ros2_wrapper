@@ -10,12 +10,143 @@
 
 MYNTEYE_BEGIN_NAMESPACE
 
+inline double compute_time(const double end, const double start) {
+  return end - start;
+}
+
 class MynteyeWrapper: public rclcpp::Node {
 public:
   MynteyeWrapper()
   : Node("mynteye_wrapper") {
 
     initDevice();
+
+    if (api_ == nullptr) {
+      RCLCPP_FATAL(this->get_logger(), "No MYNT EYE device selected :(");
+      throw std::runtime_error("No MYNT EYE device selected :(");
+    }
+
+    pthread_mutex_init(&mutex_data_, nullptr);
+
+    // node params
+    std::map<Stream, std::string> stream_names{
+        {Stream::LEFT, "left"},
+        {Stream::RIGHT, "right"},
+        {Stream::LEFT_RECTIFIED, "left_rect"},
+        {Stream::RIGHT_RECTIFIED, "right_rect"},
+        {Stream::DISPARITY, "disparity"},
+        {Stream::DISPARITY_NORMALIZED, "disparity_norm"},
+        {Stream::DEPTH, "depth"},
+        {Stream::POINTS, "points"}
+    };
+
+    std::map<Stream, std::string> stream_topics;
+    for (auto &&it : stream_names) {
+      // Declare the parameter with default value
+      this->declare_parameter<std::string>(it.second + "_topic", it.second);
+
+      // Get the parameter value
+      std::string topic_name;
+      this->get_parameter(it.second + "_topic", topic_name);
+      // Store in the topic map
+      stream_topics[it.first] = topic_name;
+      // Initialize published flag
+      is_published_[it.first] = false;
+    }
+    // Get the parameter value
+
+    base_frame_id_ = "camera_link";
+    this->declare_parameter<std::string>("base_frame_id", base_frame_id_);
+    this->get_parameter("base_frame_id", base_frame_id_);
+
+    RCLCPP_INFO(this->get_logger(), "Base frame ID: %s", base_frame_id_.c_str());
+
+    int tmp_disparity_type_ = 0;
+    disparity_type_ = DisparityComputingMethod::BM;
+    this->declare_parameter<int>("disparity_computing_method", tmp_disparity_type_);
+    this->get_parameter("disparity_computing_method", tmp_disparity_type_);
+    disparity_type_ = (DisparityComputingMethod)tmp_disparity_type_;
+    api_->SetDisparityComputingMethodType(disparity_type_);
+
+    RCLCPP_INFO(this->get_logger(), "Disparity computing method: %d", tmp_disparity_type_);
+
+    // device options of standard
+    if (model_ == Model::STANDARD) {
+      option_names_ = {
+          {Option::GAIN, "standard/gain"},
+          {Option::BRIGHTNESS, "standard/brightness"},
+          {Option::CONTRAST, "standard/contrast"},
+          {Option::FRAME_RATE, "standard/frame_rate"},
+          {Option::IMU_FREQUENCY, "standard/imu_frequency"},
+          {Option::EXPOSURE_MODE, "standard/exposure_mode"},
+          {Option::MAX_GAIN, "standard/max_gain"},
+          {Option::MAX_EXPOSURE_TIME, "standard/max_exposure_time"},
+          {Option::DESIRED_BRIGHTNESS, "standard/desired_brightness"},
+          {Option::IR_CONTROL, "standard/ir_control"},
+          {Option::HDR_MODE, "standard/hdr_mode"},
+          {Option::ACCELEROMETER_RANGE, "standard/accel_range"},
+          {Option::GYROSCOPE_RANGE, "standard/gyro_range"}};
+    }
+
+    for (auto &&it : option_names_) {
+      if (!api_->Supports(it.first))
+        continue;
+
+      this->declare_parameter<int>(it.second, -1);
+
+      // Retrieve parameter value
+      int value = this->get_parameter(it.second).as_int();
+
+      if (value != -1) {
+          RCLCPP_INFO(this->get_logger(), "Set %s to %d", it.second.c_str(), value);
+          api_->SetOptionValue(it.first, value);
+      }
+
+      RCLCPP_INFO(this->get_logger(), "%d: %d",
+                  static_cast<int>(it.first),
+                  api_->GetOptionValue(it.first));
+    }
+
+    // publishers
+
+  }
+  ~MynteyeWrapper() override {
+    if (api_) {
+      api_->Stop(Source::ALL);
+    }
+    if (time_beg_ != -1) {
+      double time_end = this->now().seconds();
+
+      LOG(INFO) << "Time elapsed: " << compute_time(time_end, time_beg_)
+                << " s";
+      if (left_time_beg_ != -1) {
+        LOG(INFO) << "Left count: " << left_count_ << ", fps: "
+                  << (left_count_ / compute_time(time_end, left_time_beg_));
+      }
+      if (right_time_beg_ != -1) {
+        LOG(INFO) << "Right count: " << right_count_ << ", fps: "
+                  << (right_count_ / compute_time(time_end, right_time_beg_));
+      }
+      if (imu_time_beg_ != -1) {
+          if (model_ == Model::STANDARD) {
+            LOG(INFO) << "Imu count: " << imu_count_ << ", hz: "
+                      << (imu_count_ /
+                      compute_time(time_end, imu_time_beg_));
+          } else {
+          if (publish_imu_by_sync_) {
+            LOG(INFO) << "imu_sync_count: " << imu_sync_count_ << ", hz: "
+                      << (imu_sync_count_ /
+                      compute_time(time_end, imu_time_beg_));
+          } else {
+            LOG(INFO) << "Imu count: " << imu_count_ << ", hz: "
+                      << (imu_count_ /
+                      compute_time(time_end, imu_time_beg_));
+          }
+        }
+      }
+
+    }
+    RCLCPP_INFO(this->get_logger(), "Destructor called");
 
   }
 
@@ -204,13 +335,31 @@ private:
   }
 
   bool is_intrinsics_enable_;
+  pthread_mutex_t mutex_data_;
   Model model_;
+  std::map<Option, std::string> option_names_;
+  std::map<Stream, bool> is_published_;
+  bool is_motion_published_;
+  bool is_started_;
   int frame_rate_;
   std::shared_ptr<API> api_;
+
+  std::string base_frame_id_;
+  DisparityComputingMethod disparity_type_;
 
   // rectification transforms
   cv::Mat left_r_, right_r_, left_p_, right_p_, q_;
   cv::Rect left_roi_, right_roi_;
+
+  double time_beg_ = -1;
+  double left_time_beg_ = -1;
+  double right_time_beg_ = -1;
+  double imu_time_beg_ = -1;
+  std::size_t left_count_ = 0;
+  std::size_t right_count_ = 0;
+  std::size_t imu_count_ = 0;
+  std::size_t imu_sync_count_ = 0;
+  bool publish_imu_by_sync_ = true;
 };
 
 MYNTEYE_END_NAMESPACE

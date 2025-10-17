@@ -2,6 +2,9 @@
 
 #include <opencv2/calib3d/calib3d.hpp>
 
+#include <sensor_msgs/msg/image.hpp>
+#include <sensor_msgs/image_encodings.hpp>
+
 #include "mynteye/logger.h"
 #include "mynteye/api/api.h"
 #include "mynteye/device/context.h"
@@ -10,6 +13,7 @@
 
 MYNTEYE_BEGIN_NAMESPACE
 
+namespace enc = sensor_msgs::image_encodings;
 inline double compute_time(const double end, const double start) {
   return end - start;
 }
@@ -107,7 +111,54 @@ public:
                   api_->GetOptionValue(it.first));
     }
 
+    int depth_type = 0;
+    this->declare_parameter<int>("depth_type", depth_type);
+    this->get_parameter("depth_type", depth_type);
     // publishers
+    if (model_ == Model::STANDARD) {
+      if (depth_type == 0) {
+        camera_encodings_ = {{Stream::LEFT, enc::MONO8},
+          {Stream::RIGHT, enc::MONO8},
+          {Stream::LEFT_RECTIFIED, enc::MONO8},
+          {Stream::RIGHT_RECTIFIED, enc::MONO8},
+          {Stream::DISPARITY, enc::MONO8},  // float
+          {Stream::DISPARITY_NORMALIZED, enc::MONO8},
+          {Stream::DEPTH, enc::MONO16}};
+
+      } else if (depth_type == 1) {
+        camera_encodings_ = {{Stream::LEFT, enc::MONO8},
+          {Stream::RIGHT, enc::MONO8},
+          {Stream::LEFT_RECTIFIED, enc::MONO8},
+          {Stream::RIGHT_RECTIFIED, enc::MONO8},
+          {Stream::DISPARITY, enc::MONO8},  // float
+          {Stream::DISPARITY_NORMALIZED, enc::MONO8},
+          {Stream::DEPTH, enc::TYPE_16UC1}};
+      }
+    }
+    // stream toggles
+    for (auto &&it : stream_names) {
+      if (it.first == Stream::LEFT || it.first == Stream::RIGHT) {
+        // Native streams — skip them
+        continue;
+      } else {
+          if (!api_->Supports(it.first))
+              continue;
+
+          const std::string param_name = "enable_" + it.second;
+
+          // Declare and read the parameter (default: false)
+          this->declare_parameter<bool>(param_name, false);
+          bool enabled = this->get_parameter(param_name).as_bool();
+
+          if (enabled) {
+              api_->EnableStreamData(it.first);
+              RCLCPP_INFO(this->get_logger(),
+                          "Enable stream data of %d",
+                          static_cast<int>(it.first));
+          }
+      }
+    }
+
 
   }
   ~MynteyeWrapper() override {
@@ -337,6 +388,8 @@ private:
   bool is_intrinsics_enable_;
   pthread_mutex_t mutex_data_;
   Model model_;
+  std::map<Stream, std::string> camera_encodings_;
+
   std::map<Option, std::string> option_names_;
   std::map<Stream, bool> is_published_;
   bool is_motion_published_;

@@ -11,6 +11,8 @@ mynt_eye_ros2_wrapper:
     points_topic: points/data_raw
     depth_topic: depth/image_rawxxx
 
+    depth_type: 0
+
     # standard/gain range: [0,48]
     standard/gain: -1
     # standard/gain: 24
@@ -67,3 +69,10 @@ mynt_eye_ros2_wrapper:
     # index_s_0: 0
     # MYNTEYE-S1030, Reslution: 376x240, Format: YUYV
     # index_s_1: 1
+
+    enable_depth: True
+    enable_disparity: True
+    enable_disparity_norm: True
+    enable_points: True
+    enable_left_rect: True
+    enable_right_rect: True

@@ -5,11 +5,11 @@ mynt_eye_ros2_wrapper:
     left_topic: left/image_raw
     right_topic: right/image_raw
     left_rect_topic: left_rect/image_rect
-    right_rect_topic: right_rct/image_rect
+    right_rect_topic: right_rect/image_rect
     disparity_topic: disparity/image_raw
     disparity_norm_topic: disparity/image_norm
     points_topic: points/data_raw
-    depth_topic: depth/image_rawxxx
+    depth_topic: depth/image_raw
 
     depth_type: 0
 

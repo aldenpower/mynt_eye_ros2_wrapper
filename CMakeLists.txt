@@ -20,7 +20,7 @@ find_package(ament_cmake REQUIRED)
 find_package(sensor_msgs REQUIRED)
 # find_package(geometry_msgs REQUIRED)
 # find_package(cv_bridge REQUIRED)
-# find_package(image_transport REQUIRED)
+find_package(image_transport REQUIRED)
 # find_package(tf2 REQUIRED)
 # find_package(tf2_ros REQUIRED)
 find_package(OpenCV REQUIRED)
@@ -43,7 +43,7 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
   # ${geometry_msgs_TARGETS}
   ${sensor_msgs_TARGETS}
   # cv_bridge::cv_bridge
-  # image_transport::image_transport
+  image_transport::image_transport
   # sensor_msgs::sensor_msgs_library
   # tf2::tf2
   # tf2_ros::static_transform_broadcaster_node

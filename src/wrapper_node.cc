@@ -2,7 +2,11 @@
 
 #include <opencv2/calib3d/calib3d.hpp>
 
+#include "image_transport/image_transport.hpp"
 #include <sensor_msgs/msg/image.hpp>
+#include <sensor_msgs/msg/point_cloud2.hpp>
+
+
 #include <sensor_msgs/image_encodings.hpp>
 
 #include "mynteye/logger.h"
@@ -21,8 +25,8 @@ inline double compute_time(const double end, const double start) {
 class MynteyeWrapper: public rclcpp::Node {
 public:
   MynteyeWrapper()
-  : Node("mynteye_wrapper") {
-
+  : Node("mynteye_wrapper") {}
+  void onInit() {
     initDevice();
 
     if (api_ == nullptr) {
@@ -111,6 +115,29 @@ public:
                   api_->GetOptionValue(it.first));
     }
 
+    // TODO Check image transport ROS2
+    // publishers
+    // Initialize ImageTransport
+    // image_transport::ImageTransport it(rclcpp::Node::shared_from_this());
+    // image_transport::ImageTransport it(this->shared_from_this());
+    // for (auto &&it : stream_names) {
+      // auto &&topic = stream_topics[it.first];
+
+      // if (it.first == Stream::POINTS) {
+        // points_publisher_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(topic, 1);
+      // } else {
+        // image_transport in ROS2 only advertises image topics.
+        // To emulate advertiseCamera(), you create both image and camera_info publishers.
+        // image_publishers_[it.first] = it.advertise(topic, 10);
+        // camera_info_publishers_[it.first] =
+        // this->create_publisher<sensor_msgs::msg::CameraInfo>(topic + "/camera_info", 10);
+
+        // camera_publishers_[it.first] = it.advertise(topic, 1);
+      // }
+
+      // RCLCPP_INFO(this->get_logger(), "Advertised on topic %s", topic.c_str());
+    // }
+
     int depth_type = 0;
     this->declare_parameter<int>("depth_type", depth_type);
     this->get_parameter("depth_type", depth_type);
@@ -158,8 +185,11 @@ public:
           }
       }
     }
-
-
+    // rclcpp::WallRate loop_rate(frame_rate_);
+    // while (rclcpp::ok()) {
+    //   // publishTopics();
+    //   loop_rate.sleep();
+    // }
   }
   ~MynteyeWrapper() override {
     if (api_) {
@@ -387,10 +417,17 @@ private:
 
   bool is_intrinsics_enable_;
   pthread_mutex_t mutex_data_;
+  std::map<Option, std::string> option_names_;
   Model model_;
+  // camera:
+  //   LEFT, RIGHT, LEFT_RECTIFIED, RIGHT_RECTIFIED,
+  //   DISPARITY, DISPARITY_NORMALIZED,
+  //   DEPTH
+  // std::map<Stream, image_transport::CameraPublisher> camera_publishers_;
+  // std::map<Stream, sensor_msgs::CameraInfoPtr> camera_info_ptrs_;
   std::map<Stream, std::string> camera_encodings_;
 
-  std::map<Option, std::string> option_names_;
+
   std::map<Stream, bool> is_published_;
   bool is_motion_published_;
   bool is_started_;
@@ -419,7 +456,9 @@ MYNTEYE_END_NAMESPACE
 
 int main(int argc, char *argv[]) {
   rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<mynteye::MynteyeWrapper>());
+  auto node = std::make_shared<mynteye::MynteyeWrapper>();
+  node -> onInit();
+  rclcpp::spin(node);
   rclcpp::shutdown();
   return 0;
 }
